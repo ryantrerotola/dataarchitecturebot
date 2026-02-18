@@ -31,6 +31,10 @@ Analyzes your Snowflake data architecture and recommends improvements based on y
 pip install -e .
 ```
 
+This project uses `pyproject.toml` (PEP 517/518) for packaging.
+
+For older `pip` versions that still expect legacy setuptools editable mode, a minimal `setup.py` shim is included so `pip install -e .` continues to work.
+
 ## Configuration
 
 ### Option 1: Environment variables
@@ -117,6 +121,13 @@ snowflake-architect goals
 ```bash
 snowflake-architect test-connection
 ```
+
+## Troubleshooting
+
+- `ModuleNotFoundError: No module named 'snowflake_architect'`
+  - Install in editable mode first: `pip install -e .`
+  - If editable install fails with `setup.py`/`setup.cfg` not found, upgrade pip: `python -m pip install --upgrade pip`
+  - Or run tests with source path directly: `PYTHONPATH=src pytest`
 
 ## Goals
 
