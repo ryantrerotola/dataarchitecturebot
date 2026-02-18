@@ -31,6 +31,10 @@ Analyzes your Snowflake data architecture and recommends improvements based on y
 pip install -e .
 ```
 
+This project uses `pyproject.toml` (PEP 517/518) for packaging.
+
+For older `pip` versions that still expect legacy setuptools editable mode, a minimal `setup.py` shim is included so `pip install -e .` continues to work.
+
 ## Configuration
 
 ### Option 1: Environment variables
@@ -106,6 +110,8 @@ snowflake-architect -c config.yaml analyze \
 
 The live connection additionally provides query usage stats, warehouse costs, and stale/unused object detection (which DDL mode can't provide since there's no runtime data).
 
+If you cannot grant access to `SNOWFLAKE.ACCOUNT_USAGE` (or the `SNOWFLAKE` database at all), use DDL mode. Lineage and structural architecture findings are inferred directly from the DDL text without any account usage views.
+
 ### List available goals
 
 ```bash
@@ -117,6 +123,13 @@ snowflake-architect goals
 ```bash
 snowflake-architect test-connection
 ```
+
+## Troubleshooting
+
+- `ModuleNotFoundError: No module named 'snowflake_architect'`
+  - Install in editable mode first: `pip install -e .`
+  - If editable install fails with `setup.py`/`setup.cfg` not found, upgrade pip: `python -m pip install --upgrade pip`
+  - Or run tests with source path directly: `PYTHONPATH=src pytest`
 
 ## Goals
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -138,6 +138,22 @@ class TestStaleObjectDetection:
         assert len(stale_findings) == 0
 
 
+    def test_handles_timezone_aware_last_altered(self):
+        old_date = datetime.now(timezone.utc) - timedelta(days=120)
+        metadata = ExtractedMetadata(
+            objects=[
+                _make_obj(name="TZ_AWARE_OLD", last_altered=old_date, bytes_=2_000_000_000),
+            ],
+            metadata_source="live",
+        )
+        analyzer = ArchitectureAnalyzer(metadata, stale_threshold_days=90)
+        result = analyzer.analyze()
+
+        stale_findings = [f for f in result.findings if f.category == "stale_data"]
+        assert len(stale_findings) == 1
+        assert any("TZ_AWARE_OLD" in obj for obj in stale_findings[0].affected_objects)
+
+
 class TestUnusedObjectDetection:
     def test_detects_unused_objects(self):
         metadata = ExtractedMetadata(
@@ -171,6 +187,24 @@ class TestUnusedObjectDetection:
 
         write_only = [f for f in result.findings if f.category == "write_only"]
         assert len(write_only) == 1
+
+
+    def test_skips_usage_based_findings_in_ddl_mode(self):
+        metadata = ExtractedMetadata(
+            objects=[
+                _make_obj(name="DDL_TABLE_A"),
+                _make_obj(name="DDL_TABLE_B"),
+            ],
+            query_usage=[],
+            metadata_source="ddl",
+        )
+        analyzer = ArchitectureAnalyzer(metadata)
+        result = analyzer.analyze()
+
+        categories = {f.category for f in result.findings}
+        assert "unused" not in categories
+        assert "write_only" not in categories
+        assert "stale_data" not in categories
 
 
 class TestDeepLineage:

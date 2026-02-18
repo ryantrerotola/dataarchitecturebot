@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import networkx as nx
 
@@ -70,6 +70,7 @@ class ArchitectureAnalyzer:
         self.graph = nx.DiGraph()
         self._object_map: dict[str, ObjectInfo] = {}
         self._usage_map: dict[str, QueryUsage] = {}
+        self._is_ddl_mode = self.metadata.metadata_source.lower() == "ddl"
         self._build_graph()
 
     def _build_graph(self) -> None:
@@ -119,9 +120,10 @@ class ArchitectureAnalyzer:
         )
 
         result.findings.extend(self._find_cycles())
-        result.findings.extend(self._find_stale_objects())
-        result.findings.extend(self._find_unused_objects())
-        result.findings.extend(self._find_write_only_objects())
+        if not self._is_ddl_mode:
+            result.findings.extend(self._find_stale_objects())
+            result.findings.extend(self._find_unused_objects())
+            result.findings.extend(self._find_write_only_objects())
         result.findings.extend(self._find_deep_lineage_chains())
         result.findings.extend(self._find_wide_fan_out())
         result.findings.extend(self._find_potential_duplicates())
@@ -178,14 +180,15 @@ class ArchitectureAnalyzer:
     def _find_stale_objects(self) -> list[Finding]:
         """Find objects that haven't been modified in a long time but still consume storage."""
         findings = []
-        now = datetime.utcnow()
+        now = _normalize_datetime(datetime.now(timezone.utc))
         threshold = now - timedelta(days=self.stale_days)
 
         stale_objects = []
         for obj in self.metadata.objects:
             if obj.object_type == "VIEW":
                 continue  # views don't consume storage
-            if obj.last_altered and obj.last_altered < threshold:
+            last_altered = _normalize_datetime(obj.last_altered)
+            if last_altered and last_altered < threshold:
                 stale_objects.append(obj)
 
         if stale_objects:
@@ -552,6 +555,15 @@ class ArchitectureAnalyzer:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _normalize_datetime(dt: datetime | None) -> datetime | None:
+    """Normalize datetimes to UTC-naive for safe comparisons."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt
+    return dt.astimezone(timezone.utc).replace(tzinfo=None)
 
 
 def _fmt_bytes(b: int) -> str:
