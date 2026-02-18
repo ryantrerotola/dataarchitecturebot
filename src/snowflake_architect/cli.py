@@ -11,6 +11,7 @@ from rich.table import Table
 
 from snowflake_architect.analyzer import ArchitectureAnalyzer
 from snowflake_architect.config import load_config
+from snowflake_architect.ddl_parser import parse_ddl
 from snowflake_architect.extractor import MetadataExtractor
 from snowflake_architect.recommender import (
     ALL_GOALS,
@@ -67,6 +68,28 @@ def main(ctx: click.Context, config_path: str | None, verbose: bool) -> None:
     type=int,
     help="Days of no reads after which an object is considered unused.",
 )
+@click.option(
+    "--ddl-file", "-f",
+    type=click.Path(exists=True),
+    default=None,
+    help="Path to a SQL file containing DDL statements (skips Snowflake connection).",
+)
+@click.option(
+    "--ddl",
+    is_flag=True,
+    default=False,
+    help="Read DDL from stdin (paste mode — skips Snowflake connection).",
+)
+@click.option(
+    "--default-database",
+    default="DEFAULT_DB",
+    help="Default database name for unqualified DDL object names.",
+)
+@click.option(
+    "--default-schema",
+    default="PUBLIC",
+    help="Default schema name for unqualified DDL object names.",
+)
 @click.pass_context
 def analyze(
     ctx: click.Context,
@@ -74,31 +97,36 @@ def analyze(
     output_dir: str,
     stale_days: int,
     low_usage_days: int,
+    ddl_file: str | None,
+    ddl: bool,
+    default_database: str,
+    default_schema: str,
 ) -> None:
-    """Run full architecture analysis and generate a report."""
-    config_path = ctx.obj["config_path"]
+    """Run architecture analysis and generate a report.
 
-    try:
-        config = load_config(config_path)
-    except ValueError as e:
-        console.print(f"[red]Configuration error:[/red] {e}")
-        sys.exit(1)
+    By default, connects to Snowflake to extract metadata. Use --ddl-file or --ddl
+    to analyze DDL statements directly without a Snowflake connection.
 
-    config.stale_threshold_days = stale_days
-    config.low_usage_threshold_days = low_usage_days
-    config.output_dir = output_dir
-    if goal:
-        config.goals = list(goal)
+    \b
+    Examples:
+      # From Snowflake
+      snowflake-architect analyze -g reduce_compute
 
-    goals = config.goals if config.goals else None
+      # From a DDL file
+      snowflake-architect analyze --ddl-file schema.sql -g simplify
+
+      # Paste DDL from stdin
+      snowflake-architect analyze --ddl -g reduce_storage
+    """
+    using_ddl = ddl or ddl_file is not None
+    goals = list(goal) if goal else None
 
     console.print("[bold]Snowflake Architecture Analyzer[/bold]\n")
 
-    # Extract
-    console.print("[cyan]Connecting to Snowflake...[/cyan]")
-    with MetadataExtractor(config) as extractor:
-        console.print("[cyan]Extracting metadata...[/cyan]")
-        metadata = extractor.extract_all()
+    if using_ddl:
+        metadata = _extract_from_ddl(ddl_file, default_database, default_schema)
+    else:
+        metadata = _extract_from_snowflake(ctx, stale_days, low_usage_days, output_dir, goal)
 
     console.print(
         f"  Found [green]{len(metadata.objects)}[/green] objects, "
@@ -123,9 +151,56 @@ def analyze(
     _print_summary(report.recommendations, goals)
 
     # Write report
-    console.print(f"\n[cyan]Writing report...[/cyan]")
+    console.print("\n[cyan]Writing report...[/cyan]")
     report_path = generate_report(report, output_dir)
     console.print(f"\n[bold green]Report saved to:[/bold green] {report_path}")
+
+
+def _extract_from_ddl(
+    ddl_file: str | None,
+    default_database: str,
+    default_schema: str,
+):
+    """Read DDL from a file or stdin and parse it."""
+    if ddl_file:
+        console.print(f"[cyan]Reading DDL from file:[/cyan] {ddl_file}")
+        with open(ddl_file) as f:
+            ddl_text = f.read()
+    else:
+        console.print(
+            "[cyan]Reading DDL from stdin.[/cyan] "
+            "Paste your DDL below, then press Ctrl+D (Unix) or Ctrl+Z (Windows) when done:\n"
+        )
+        ddl_text = sys.stdin.read()
+
+    if not ddl_text.strip():
+        console.print("[red]No DDL provided.[/red]")
+        sys.exit(1)
+
+    console.print("[cyan]Parsing DDL...[/cyan]")
+    return parse_ddl(ddl_text, default_database, default_schema)
+
+
+def _extract_from_snowflake(ctx, stale_days, low_usage_days, output_dir, goal):
+    """Connect to Snowflake and extract metadata."""
+    config_path = ctx.obj["config_path"]
+
+    try:
+        config = load_config(config_path)
+    except ValueError as e:
+        console.print(f"[red]Configuration error:[/red] {e}")
+        sys.exit(1)
+
+    config.stale_threshold_days = stale_days
+    config.low_usage_threshold_days = low_usage_days
+    config.output_dir = output_dir
+    if goal:
+        config.goals = list(goal)
+
+    console.print("[cyan]Connecting to Snowflake...[/cyan]")
+    with MetadataExtractor(config) as extractor:
+        console.print("[cyan]Extracting metadata...[/cyan]")
+        return extractor.extract_all()
 
 
 @main.command()
@@ -158,7 +233,7 @@ def test_connection(ctx: click.Context) -> None:
     try:
         with MetadataExtractor(config) as extractor:
             databases = extractor._get_databases()
-            console.print(f"[green]Connected successfully![/green]")
+            console.print("[green]Connected successfully![/green]")
             console.print(f"Accessible databases: {', '.join(databases)}")
     except Exception as e:
         console.print(f"[red]Connection failed:[/red] {e}")

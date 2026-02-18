@@ -1,6 +1,9 @@
 # Snowflake Architecture Analyzer
 
-Connects to your Snowflake account, extracts metadata and lineage, and recommends architecture improvements based on your goals (reduce compute, reduce storage, simplify, etc.).
+Analyzes your Snowflake data architecture and recommends improvements based on your goals (reduce compute, reduce storage, simplify, etc.). Works two ways:
+
+1. **Live connection** — connects to your Snowflake account to extract metadata, lineage, and usage stats
+2. **DDL mode** — paste or point to a `.sql` file with your DDL (no Snowflake connection needed)
 
 ## What it detects
 
@@ -19,8 +22,8 @@ Connects to your Snowflake account, extracts metadata and lineage, and recommend
 ## Requirements
 
 - Python 3.10+
-- A Snowflake account with access to `SNOWFLAKE.ACCOUNT_USAGE` (for lineage and usage data)
-- A role with `IMPORTED PRIVILEGES` on the `SNOWFLAKE` database
+- **For live connection mode:** A Snowflake account with access to `SNOWFLAKE.ACCOUNT_USAGE`
+- **For DDL mode:** Just your DDL statements in a file or on the clipboard — no Snowflake account needed
 
 ## Installation
 
@@ -53,7 +56,34 @@ Environment variables override config file values. Use the config file for non-s
 
 ## Usage
 
-### Run full analysis
+### Analyze from DDL (no Snowflake connection needed)
+
+The fastest way to get started — just point to a SQL file with your CREATE TABLE/VIEW statements:
+
+```bash
+# From a DDL file
+snowflake-architect analyze --ddl-file my_schema.sql -g simplify
+
+# With a specific default database/schema for unqualified names
+snowflake-architect analyze --ddl-file my_schema.sql \
+  --default-database PROD \
+  --default-schema ANALYTICS \
+  -g reduce_compute
+
+# Paste DDL interactively from stdin
+snowflake-architect analyze --ddl -g reduce_storage
+# Then paste your DDL and press Ctrl+D when done
+
+# Pipe DDL from another command
+cat schema.sql | snowflake-architect analyze --ddl -g simplify
+```
+
+The DDL parser extracts:
+- **Objects** — tables, views, materialized views, dynamic tables, transient tables
+- **Lineage** — which objects depend on which (from view definitions and CTAS)
+- **Properties** — clustering keys, retention settings, transient flags, comments
+
+### Analyze from live Snowflake connection
 
 ```bash
 # With env vars
@@ -73,6 +103,8 @@ snowflake-architect -c config.yaml analyze \
   --low-usage-days 14 \
   -o ./my-reports
 ```
+
+The live connection additionally provides query usage stats, warehouse costs, and stale/unused object detection (which DDL mode can't provide since there's no runtime data).
 
 ### List available goals
 
@@ -109,7 +141,7 @@ The tool generates a Markdown report in the output directory containing:
 - Detailed findings with affected objects and remediation steps
 - Object inventory by type and database
 
-## Required Snowflake Permissions
+## Required Snowflake Permissions (live connection mode only)
 
 The tool queries these Snowflake system views:
 
