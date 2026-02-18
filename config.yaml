@@ -1,0 +1,46 @@
+# Snowflake Architecture Analyzer - Example Configuration
+#
+# Copy this file to config.yaml and fill in your values.
+# Environment variables take precedence over values in this file.
+# Sensitive values (password, private_key_path) should be set via env vars.
+
+connection:
+  account: "idexx.us-east-1"   # or set SNOWFLAKE_ACCOUNT
+  user: "SVR_VSS_ANALYTICS"                    # or set SNOWFLAKE_USER
+  password: "N3vergonnagiveyouup!"                       # prefer SNOWFLAKE_PASSWORD env var
+  role: "VSSANALYTICS_DB_VSSANALYTICS_READONLY"                 # or set SNOWFLAKE_ROLE
+  warehouse: "SALESANALYTICS_ANALYTICAL_WH"             # or set SNOWFLAKE_WAREHOUSE
+  # authenticator: "externalbrowser"   # for SSO / set SNOWFLAKE_AUTHENTICATOR
+
+# Which databases/schemas to analyze
+scope:
+  # Leave empty to analyze all accessible databases
+  databases: []
+  # databases:
+  #   - PROD_DB
+  #   - ANALYTICS_DB
+
+  # Databases to skip (defaults shown)
+  exclude_databases:
+    - SNOWFLAKE
+    - SNOWFLAKE_SAMPLE_DATA
+
+  # Schemas to skip in every database (defaults shown)
+  exclude_schemas:
+    - INFORMATION_SCHEMA
+
+# Optimization goals - determines which findings are prioritized
+# Options: reduce_compute, reduce_storage, simplify,
+#          improve_reliability, improve_performance, governance
+goals:
+  - reduce_compute
+  - reduce_storage
+
+# How many days before an unmodified object is considered "stale"
+stale_threshold_days: 90
+
+# How many days of no read queries before an object is "unused"
+low_usage_threshold_days: 30
+
+# Where to write the output report
+output_dir: ./reports

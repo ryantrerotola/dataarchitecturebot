@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "snowflake-architect"
 version = "0.1.0"
 description = "Analyze Snowflake data architecture and lineage, recommend improvements"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
     "snowflake-connector-python>=3.6.0",
     "click>=8.1.0",
