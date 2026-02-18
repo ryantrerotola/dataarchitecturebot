@@ -110,6 +110,8 @@ snowflake-architect -c config.yaml analyze \
 
 The live connection additionally provides query usage stats, warehouse costs, and stale/unused object detection (which DDL mode can't provide since there's no runtime data).
 
+If you cannot grant access to `SNOWFLAKE.ACCOUNT_USAGE` (or the `SNOWFLAKE` database at all), use DDL mode. Lineage and structural architecture findings are inferred directly from the DDL text without any account usage views.
+
 ### List available goals
 
 ```bash

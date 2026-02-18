@@ -135,6 +135,7 @@ def parse_ddl(
         lineage_edges=edges,
         query_usage=[],
         warehouse_usage=[],
+        metadata_source="ddl",
     )
 
 

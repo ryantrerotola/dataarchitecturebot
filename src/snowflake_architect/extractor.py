@@ -91,6 +91,7 @@ class ExtractedMetadata:
     lineage_edges: list[LineageEdge] = field(default_factory=list)
     query_usage: list[QueryUsage] = field(default_factory=list)
     warehouse_usage: list[WarehouseUsage] = field(default_factory=list)
+    metadata_source: str = "live"  # "live" (Snowflake) or "ddl" (parsed SQL)
     extraction_time: datetime = field(default_factory=datetime.utcnow)
 
 
@@ -377,6 +378,7 @@ class MetadataExtractor:
             lineage_edges=self.extract_lineage(lookback_days=lookback),
             query_usage=self.extract_query_usage(lookback_days=lookback),
             warehouse_usage=self.extract_warehouse_usage(lookback_days=lookback),
+            metadata_source="live",
         )
 
 
